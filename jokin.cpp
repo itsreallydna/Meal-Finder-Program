@@ -1,24 +1,19 @@
-// Memory Management: You're dynamically allocating memory for Ingredient objects in the updateGroceries() 
-// method but not freeing it. Consider using smart pointers like std::unique_ptr to manage memory automatically.
-
-//Error Handling: Consider adding error handling in the updateGroceries() method, especially for cases where 
-// the file opening fails or if there are issues with reading the file contents.
-
-
-
 //CONVENTIONS
 // snake_case --> variables
 // camelCase --> methods/functions
 // PascalCase -->  Classes
+
 #include <vector>
 #include <map>
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
 #include <string>
+#include <set>
 #include <algorithm>
 using namespace std;
 
+// not used in DishHierarchy, only for Pantry
 class Ingredient {
     public:
 
@@ -36,11 +31,15 @@ class Dish {
     public:
 
     string dishName;
-    map<Ingredient*, pair<int, string>> ingredients; // Map to store ingredient and its amount
+    std::map<std::string, pair<int, string>> ingredients; // Map to store ingredient and its amount
 
-    // Method to add ingredients to the dish
-    void addIngredient(Ingredient* item, int amount, string units) {
-        ingredients[item] = make_pair(amount, units);
+
+    void setName(std::string newname) {
+        dishName = newname;
+    }
+
+    void addIngredient(std::string& ingredient, int amount, std::string unit) {
+        ingredients[ingredient] = { amount, unit };
     }
 
     void printDish() {
@@ -48,8 +47,12 @@ class Dish {
         cout << dishName << endl;
 
         cout << "This dish requires:" << endl;
-        for (auto& pair : ingredients) {
-            cout << pair.second.first << " " << pair.second.second << " of " << pair.first->ingrdnt_name << endl;
+        for (const auto& entry : ingredients) {
+            const std::string& ingredient = entry.first;
+            int amount = entry.second.first;
+            const std::string& unit = entry.second.second;
+
+            std::cout << "  - " << ingredient << ": " << amount << " " << unit << "\n";
         }
         cout << endl;
 
@@ -67,6 +70,8 @@ class GroceryHierarchy {
     void addFoodItem(Ingredient* item) {
         items.push_back(item);
     }
+
+    string printItems() {}
 
     // Consider adding error handling
     void updateGroceries(const string& filename) {
@@ -121,26 +126,52 @@ class GroceryHierarchy {
 };
 
 
-// Class representing a hierarchy of dishes
+// Custom comparator to compare dishes by dishName
+struct CompareDish {
+    bool operator()(const Dish* lhs, const Dish* rhs) const {
+        return lhs->dishName < rhs->dishName;
+    }
+};
+
+
 class DishHierarchy {
     public:
 
-    vector<Dish*> dishes;
+    std::set<Dish*, CompareDish> dishLexicon;
 
-    // Method to add a dish to the hierarchy
-    void addDish(Dish* dish) {
-        dishes.push_back(dish);
-    }
+    // Executes on boot
+    // Method to add and sort dish to the hierarchy from file
+    void sortMeals(const string& filename) {
 
-    // Load dishes into Hierarchy
+        ifstream file(filename);
+        if (file.is_open()) {
+            string dish;
+            string ingredient;
+            int amount;
+            string units;
+            
+            //Reads dish name
+            while (getline(file, dish)) {
 
-    // Find Dishes to Cook (Use Items from GroceryHierarchy) (Recursive Algorithm)
-    void findPossibleDishes(GroceryHierarchy items){
-        // find primary ingredients in pantry
-            // cross references with DishHierarchy to narrow
-        // find secondary ingredients
-            // cross reference with narrowed DishHierarchy
-    }
+                Dish* unsortedDish = new Dish();
+                unsortedDish->setName(dish);
+
+                // Reads first ingredient
+                while (file >> ingredient >> amount >> units) {
+                    file.ignore(); // Ignore newline character
+                    unsortedDish->addIngredient(ingredient, amount, units);
+
+                    if (file.peek() == '\n' || file.peek() == EOF) {
+                        break;
+                    }
+                }
+
+                dishLexicon.insert(unsortedDish);
+
+            }
+        }
+
+}
 };
 
 int main() {
@@ -148,9 +179,10 @@ int main() {
     
     // loading hierarchies --> need text file to get saved data into hierarchy
     GroceryHierarchy pantry;
-        // load save data into pantry
-            // read in pantry from txt file
+    // pantry.updateGroceries(nonexistantfile.txt); // dunno what to do here
+
     DishHierarchy dishes;
+    // dishes.sortMeals(MealList.txt); // dunno what to do here
 
     //program start
     cout << "hello" << endl;
@@ -183,24 +215,22 @@ int main() {
         cout << "Groceries are now in pantry ";
     }
     
-    cout << "Browse, Select, or Quit?";
+    cout << "Browse, Update, or Quit?" << endl << "(B, U, or Q)" << endl;
     while (true) {
         cin >> response;
         cout << endl;
-        //remove blank edges
-        //response toLOWERCASE
 
-        if (response.length() < 4) {
+        if (response.length() > 1) {
             cout << "Invalid input." << endl;
-            cout << "Please enter Browse, Select, or Quit" << endl;
+            cout << "Please enter B, U, or Q" << endl;
             continue;
         }
-        if (response == "browse") { /* print pantry*/ }
-        else if (response == "select") { dishes.findPossibleDishes(pantry); }
-        else if (response == "quit") { return 0; }
+        if (response == "B") { /* print pantry*/ }
+        // else if (response == "U") { dishes.findPossibleDishes(pantry); }
+        else if (response == "Q") { return 0; }
         else {
             cout << "Invalid input." << endl;
-            cout << "Please enter Browse, Select, or Quit" << endl;
+            cout << "Please enter B, U, or Q" << endl;
         }
     }
     return 0;
