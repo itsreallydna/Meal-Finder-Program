@@ -1,7 +1,7 @@
-stir fry
+stir_fry
 linguine
 24 ounces
-tomatoe sauce
+tomato_sauce
 0.25 liters
 chicken
 2 lbs
