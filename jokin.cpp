@@ -105,11 +105,14 @@ class GroceryHierarchy {
     void updateGroceries(const string& filename) {
         
         ifstream file(filename);
-        
+        // If file can't open
         if (!file.is_open()) {
             std::cout << "Unable to open file." << endl;
             return;
         }
+
+        // If there are blank spaces
+
 
         string ingredientName;
         float count;
@@ -165,7 +168,7 @@ class DishHierarchy {
             delete dish;
         }
     }
-    
+
     // Executes on boot
     // Method to add and sort dish to the hierarchy from file
     void sortMeals(const string& filename) {
@@ -199,6 +202,74 @@ class DishHierarchy {
         }
 
     }
+
+    // ENGINE --> Finds the dishes that have all ingredients in pantry
+    void findPossibleDishes(const GroceryHierarchy& pantry) {
+        // Start with all dishes
+    std::set<Dish*, CompareDish> possible = dishLexicon;
+
+    // For each pantry item
+    for (Ingredient* pantryItem : pantry.items) {
+
+        std::set<Dish*, CompareDish> nextRound;
+
+        for (Dish* dish : possible) {
+
+            auto it = dish->ingredients.find(pantryItem->ingrdnt_name);
+
+            // Dish does NOT require this ingredient
+            if (it == dish->ingredients.end()) {
+                nextRound.insert(dish);
+                continue;
+            }
+
+            // Dish requires it — check quantity
+            int requiredAmount = it->second.first;
+            string requiredUnit = it->second.second;
+
+            if (pantryItem->units == requiredUnit &&
+                pantryItem->amount >= requiredAmount) {
+                nextRound.insert(dish);
+            }
+        }
+
+        possible = nextRound;
+    }
+
+    // FINAL VALIDATION STEP
+    // Remove dishes that require ingredients not present in pantry
+    std::set<Dish*, CompareDish> finalSet;
+
+    for (Dish* dish : possible) {
+
+        bool valid = true;
+
+        for (const auto& entry : dish->ingredients) {
+            const std::string& name = entry.first;
+            const std::pair<int, std::string>& info = entry.second;
+
+            auto it = find_if(pantry.items.begin(), pantry.items.end(),
+                [&](Ingredient* ing) {
+                    return ing->ingrdnt_name == name;
+                });
+
+            if (it == pantry.items.end()) {
+                valid = false;
+                break;
+            }
+        }
+
+        if (valid) {
+            finalSet.insert(dish);
+        }
+    }
+
+    cout << "\nPossible Dishes:\n";
+    for (Dish* dish : finalSet) {
+        dish->printDish();
+    }
+    }
+
 };
 
 int main() {
@@ -206,14 +277,14 @@ int main() {
     
     // loading hierarchies --> need text file to get saved data into hierarchy
     GroceryHierarchy pantry;
-    //pantry.updateGroceries(pantry.txt); // says pantry is undefined
+    pantry.updateGroceries("pantry.txt");
 
     DishHierarchy dishes;
-    //dishes.sortMeals(menu.txt); // says menu is undefined
+    dishes.sortMeals("menu.txt");
 
     //program start
     std::cout << "hello" << endl;
-    std::cout << "Update Pantry? (y or n)" << endl;
+    std::cout << "Upload Pantry? (y or n)" << endl;
     
     string response;
     bool response_bool = true;
@@ -222,14 +293,14 @@ int main() {
     std::cin >> response;
     std::cout << endl;
 
-    if (response.length() > 1) {
-        std::cout << "Invalid input. Input was greater than size one" << endl;
-        std::cout << "Please enter 'y' or 'n'" << endl;
-        continue;
-    }
-    if (response == "y" || response == "Y") {  response_bool = true; break; }
-    else if (response == "n" || response == "N") {  response_bool = false; break; }
-    else { std::cout << "Invalid input. Please enter 'y' or 'n'."; }
+        if (response.length() > 1) {
+            std::cout << "Invalid input. Input was greater than size one" << endl;
+            std::cout << "Please enter 'y' or 'n'" << endl;
+            continue;
+        }
+        if (response == "y" || response == "Y") {  response_bool = true; break; }
+        else if (response == "n" || response == "N") {  response_bool = false; break; }
+        else { std::cout << "Invalid input. Please enter 'y' or 'n'."; }
     }
 
     response = "";
@@ -246,42 +317,57 @@ int main() {
                 cout << "File not found: " << file_name << endl;
                 cout << "Try again:";
             }
-            else { continue; }
+            else { 
+                pantry.updateGroceries(file_name);
+                std::cout << "Groceries are now in pantry " << endl;
+                break; 
+            }
         }
-        pantry.updateGroceries(file_name);
-        std::cout << "Groceries are now in pantry ";
+        
     }
     
-    std::cout << "Browse, Update, or Quit?" << endl << "(B, U, or Q)" << endl;
+    std::cout << "Start, Update, or Quit?" << endl << "(S, U, or Q)" << endl;
     while (true) {
-        cin >> response;
-        std::cout << endl;
+        std::cin >> response;
+        std::cout << std::endl;
 
         if (response.length() > 1) {
             std::cout << "Invalid input." << endl;
-            std::cout << "Please enter B, U, or Q" << endl;
+            std::cout << "Please enter S, U, or Q" << endl;
             continue;
         }
-        //if (response == "B") { dishes.findPossibleDishes(pantry) }
+        //if (response == "S") { dishes.findPossibleDishes(pantry) }
+
+        // UPDATE
         else if (response == "U") { 
             pantry.printItems(); 
-            std::cout << endl << "enter file name to update pantry: ";
+            std::cout << endl << "enter file name to update pantry, or 'Q' to quit: ";
             
             string file_name;
+            cin >> file_name;
             while (true) {
-                cin >> file_name;
-    
+                if (file_name == "Q") { 
+                    std::cout << endl;
+                    break; 
+                }
                 ifstream pantryFile(file_name);
                 if (!pantryFile) {
                     cout << "File not found: " << file_name << endl;
-                    cout << "Try again:";
+                    cout << "Try again: ";
+                    cin >> file_name;
+                    cout << endl ;
                 }
-                else { continue; }
-            }
-            pantry.updateGroceries(file_name);
-            std::cout << endl << "Groceries are now in pantry "; 
+                else { 
+                    pantry.updateGroceries(file_name);
+                    break; }
+            }                
+            std::cout << endl << "Groceries are now in pantry" << endl; 
         }
+
+        //QUIT
         else if (response == "Q") { return 0; }
+        
+        //INVALID INPUT
         else {
             std::cout << "Invalid input." << endl;
             std::cout << "Please enter B, U, or Q" << endl;
