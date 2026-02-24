@@ -6,6 +6,7 @@
 #include <vector>
 #include <map>
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <stdlib.h>
 #include <string>
@@ -52,14 +53,14 @@ class Dish {
     public:
 
     string dishName;
-    std::map<std::string, pair<int, string>> ingredients; // Map to store ingredient and its amount
+    std::map<std::string, pair<float, string>> ingredients; // Map to store ingredient and its amount
 
 
     void setName(std::string newname) {
         dishName = newname;
     }
 
-    void addIngredient(std::string& ingredient, int amount, std::string unit) {
+    void addIngredient(std::string& ingredient, float amount, std::string unit) {
         ingredients[ingredient] = { amount, unit };
     }
 
@@ -70,7 +71,7 @@ class Dish {
         std::cout << "Ingredients:" << endl;
         for (const auto& entry : ingredients) {
             const std::string& ingredient = entry.first;
-            int amount = entry.second.first;
+            float amount = entry.second.first;
             const std::string& unit = entry.second.second;
 
             std::cout << "  - " << ingredient << ": " << amount << " " << unit << "\n";
@@ -173,103 +174,88 @@ class DishHierarchy {
     // Method to add and sort dish to the hierarchy from file
     void sortMeals(const string& filename) {
 
-        ifstream file(filename);
-        if (file.is_open()) {
-            string dish;
-            string ingredient;
-            int amount;
-            string units;
-            
-            //Reads dish name
-            while (getline(file, dish)) {
+        std::ifstream file(filename);
+        if (!file.is_open()) return;
 
-                Dish* unsortedDish = new Dish();
-                unsortedDish->setName(dish);
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.empty()) continue; // skip blank lines
 
-                // Reads first ingredient
-                while (file >> ingredient >> amount >> units) {
-                    file.ignore(); // Ignore newline character
-                    unsortedDish->addIngredient(ingredient, amount, units);
+            Dish* dish = new Dish();
+            dish->setName(line);
 
-                    if (file.peek() == '\n' || file.peek() == EOF) {
-                        break;
-                    }
+            // Read ingredients until blank line or EOF
+            while (true) {
+                std::string ingredient_name;
+                if (!std::getline(file, ingredient_name)) break;
+                if (ingredient_name.empty()) break; // blank line = end of dish
+
+                std::string amount_unit_line;
+                if (!std::getline(file, amount_unit_line)) break;
+                if (amount_unit_line.empty()) break; // blank line = end of dish
+
+                std::istringstream iss(amount_unit_line);
+                float amount;
+                std::string unit;
+
+                if (!(iss >> amount >> unit)) {
+                    std::cout << "Warning: Invalid ingredient format: " << amount_unit_line << std::endl;
+                    continue;
                 }
 
-                dishLexicon.insert(unsortedDish);
-
+                dish->addIngredient(ingredient_name, amount, unit);
             }
-        }
 
+            dishLexicon.insert(dish);
+        }
     }
 
     // ENGINE --> Finds the dishes that have all ingredients in pantry
     void findPossibleDishes(const GroceryHierarchy& pantry) {
-        // Start with all dishes
-    std::set<Dish*, CompareDish> possible = dishLexicon;
+        std::set<Dish*, CompareDish> finalSet;
 
-    // For each pantry item
-    for (Ingredient* pantryItem : pantry.items) {
+        for (Dish* dish : dishLexicon) {
+            bool canMake = true;
 
-        std::set<Dish*, CompareDish> nextRound;
+        // Check all ingredients required by this dish
+            for (const auto& entry : dish->ingredients) {
+                const std::string& ingredient_name = entry.first;
+                float required_amount = entry.second.first;   // change to float if you updated Dish
+                const std::string& required_unit = entry.second.second;
 
-        for (Dish* dish : possible) {
+                // Look for this ingredient in the pantry
+                auto it = std::find_if(pantry.items.begin(), pantry.items.end(),
+                    [&](Ingredient* ing) {
+                        return ing->ingrdnt_name == ingredient_name;
+                    });
 
-            auto it = dish->ingredients.find(pantryItem->ingrdnt_name);
+                // Ingredient not in pantry
+                if (it == pantry.items.end()) {
+                    canMake = false;
+                    break;
+                }
 
-            // Dish does NOT require this ingredient
-            if (it == dish->ingredients.end()) {
-                nextRound.insert(dish);
-                continue;
+                Ingredient* pantryItem = *it;
+
+                // Check units and amount
+                if (pantryItem->units != required_unit || pantryItem->amount < required_amount) {
+                    canMake = false;
+                    break;
+                }
             }
 
-            // Dish requires it — check quantity
-            int requiredAmount = it->second.first;
-            string requiredUnit = it->second.second;
-
-            if (pantryItem->units == requiredUnit &&
-                pantryItem->amount >= requiredAmount) {
-                nextRound.insert(dish);
+            // All ingredients satisfied
+            if (canMake) {
+                finalSet.insert(dish);
             }
         }
-
-        possible = nextRound;
-    }
-
-    // FINAL VALIDATION STEP
-    // Remove dishes that require ingredients not present in pantry
-    std::set<Dish*, CompareDish> finalSet;
-
-    for (Dish* dish : possible) {
-
-        bool valid = true;
-
-        for (const auto& entry : dish->ingredients) {
-            const std::string& name = entry.first;
-            const std::pair<int, std::string>& info = entry.second;
-
-            auto it = find_if(pantry.items.begin(), pantry.items.end(),
-                [&](Ingredient* ing) {
-                    return ing->ingrdnt_name == name;
-                });
-
-            if (it == pantry.items.end()) {
-                valid = false;
-                break;
-            }
-        }
-
-        if (valid) {
-            finalSet.insert(dish);
+    
+        // Print possible dishes
+        std::cout << "\nPossible Dishes:\n";
+        for (Dish* dish : finalSet) {
+            dish->printDish();
         }
     }
-
-    cout << "\nPossible Dishes:\n";
-    for (Dish* dish : finalSet) {
-        dish->printDish();
-    }
-    }
-
 };
 
 int main() {
@@ -281,6 +267,11 @@ int main() {
 
     DishHierarchy dishes;
     dishes.sortMeals("menu.txt");
+
+    std::cout << "\nPossible Dishes:\n";
+        for (Dish* dish : dishes.dishLexicon) {
+            dish->printDish();
+        }
 
     //program start
     std::cout << "hello" << endl;
@@ -336,7 +327,10 @@ int main() {
             std::cout << "Please enter S, U, or Q" << endl;
             continue;
         }
-        //if (response == "S") { dishes.findPossibleDishes(pantry) }
+        if (response == "S") { 
+            dishes.findPossibleDishes(pantry);
+            break;
+        }
 
         // UPDATE
         else if (response == "U") { 
@@ -370,7 +364,7 @@ int main() {
         //INVALID INPUT
         else {
             std::cout << "Invalid input." << endl;
-            std::cout << "Please enter B, U, or Q" << endl;
+            std::cout << "Please enter S, U, or Q" << endl;
         }
     }
     return 0;
